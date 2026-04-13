@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*~
+.DS_Store
+
+# Data and Models
+data/
+archive/
+archive.zip
+ml-25m/
+ml-25m.zip
+results/
+.env
+*.json
+*.npz
+*.csv
+*.pt
+
+# IDE
+.vscode/
