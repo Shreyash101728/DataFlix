@@ -18,3 +18,8 @@ results/
 
 # IDE
 .vscode/
+
+# Local Datasets and PDF Artifacts
+imdb/
+tmdb/
+*.log

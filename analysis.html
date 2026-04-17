@@ -1,0 +1,424 @@
+<html><head><style>body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; } table { border-collapse: collapse; width: 100%; margin-bottom: 20px; } th, td { border: 1px solid #ddd; padding: 8px; } th { background-color: #f2f2f2; text-align: left; } h1, h2, h3 { color: #333; } </style></head><body><h1>DataFlix — Dataset &amp; Feature Analysis</h1>
+<h2>1. Dataset-by-Dataset Analysis</h2>
+<h3>Netflix Kaggle Dataset (archive/)</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Shape</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Netflix_Dataset_Rating.csv</code></td>
+<td>17,337,458 × 3</td>
+<td>User-movie interaction matrix</td>
+</tr>
+<tr>
+<td><code>Netflix_Dataset_Movie.csv</code></td>
+<td>17,770 × 3</td>
+<td>Movie identity/metadata</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>Netflix_Dataset_Rating.csv</code>: Columns = User_ID, Rating, Movie_ID. Ratings are integers 1–5, no timestamps, zero nulls. Critical weakness: No date column — temporal train/test split is impossible.</li>
+<li><code>Netflix_Dataset_Movie.csv</code>: Columns = Movie_ID, Year, Name. Year range: 1915–2005, zero nulls. Very lightweight metadata — only title and year.</li>
+</ul>
+<p>⚠️ <strong>Key finding</strong>: The Netflix rating file covers only 1,350 unique movies out of 17,770 in the movie file. The movie file is almost entirely uninteracted (87% of movies have zero ratings in this Kaggle version).</p>
+<h3>MovieLens 25M (ml-25m/)</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Shape</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ratings.csv</code></td>
+<td>25,000,095 × 4</td>
+<td>Dense interaction matrix</td>
+</tr>
+<tr>
+<td><code>movies.csv</code></td>
+<td>62,423 × 3</td>
+<td>Movie identity + genres</td>
+</tr>
+<tr>
+<td><code>links.csv</code></td>
+<td>62,423 × 3</td>
+<td>IMDb/TMDb ID bridge</td>
+</tr>
+<tr>
+<td><code>tags.csv</code></td>
+<td>1,093,360 × 4</td>
+<td>User-written free-text tags</td>
+</tr>
+<tr>
+<td><code>genome-scores.csv</code></td>
+<td>15,584,448 × 3</td>
+<td>Tag relevance (1128 tags × 13,816 movies)</td>
+</tr>
+<tr>
+<td><code>genome-tags.csv</code></td>
+<td>1,128 × 2</td>
+<td>Tag vocabulary</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>ratings.csv</code>: userId, movieId, rating, timestamp. Ratings 0.5–5.0 (half-step), zero nulls. Has timestamp → temporal split is possible.</li>
+<li><code>movies.csv</code>: movieId, title, genres. 19 clean genres as pipe-separated strings.</li>
+<li><code>links.csv</code>: movieId, imdbId, tmdbId. This is the bridge to TMDb for fetching plot synopses.</li>
+<li><code>genome-scores.csv</code>: 15.5M rows — a 13,816 × 1,128 relevance matrix per movie. Very powerful signal but extremely large — costs 500MB+ in RAM.</li>
+</ul>
+<h3>TMDb API / Local Data</h3>
+<ul>
+<li>Provides: plot overview, release date, original language, runtime, vote_average, vote_count, popularity, spoken_languages, tagline.</li>
+<li>Accessed using links.csv → tmdbId as the bridge key.</li>
+<li>This is the source of text for SBERT embeddings.</li>
+</ul>
+<h2>2. Recommended Dataset Usage</h2>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>Use?</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Netflix Rating CSV</td>
+<td>✅ <strong>YES</strong></td>
+<td>Validation + Testing only (no user overlap possible with ML training)</td>
+</tr>
+<tr>
+<td>Netflix Movie CSV</td>
+<td>✅ <strong>YES</strong></td>
+<td>Movie title/year lookup for alignment</td>
+</tr>
+<tr>
+<td>MovieLens <code>ratings.csv</code></td>
+<td>✅ <strong>YES</strong></td>
+<td>Primary training interaction matrix</td>
+</tr>
+<tr>
+<td>MovieLens <code>movies.csv</code></td>
+<td>✅ <strong>YES</strong></td>
+<td>Genre feature table</td>
+</tr>
+<tr>
+<td>MovieLens <code>links.csv</code></td>
+<td>✅ <strong>YES</strong></td>
+<td>Bridge to TMDb API</td>
+</tr>
+<tr>
+<td>MovieLens <code>tags.csv</code></td>
+<td>⚠️ <strong>OPTIONAL</strong></td>
+<td>Can supplement SBERT if plot is missing</td>
+</tr>
+<tr>
+<td>MovieLens <code>genome-scores.csv</code></td>
+<td>❌ <strong>NO</strong></td>
+<td>Too large (15.5M rows), 13,816 movies only, overlaps with SBERT</td>
+</tr>
+<tr>
+<td>TMDb Data</td>
+<td>✅ <strong>YES</strong></td>
+<td>Plot synopses for SBERT embeddings</td>
+</tr>
+<tr>
+<td>IMDb / OMDb</td>
+<td>❌ <strong>NO</strong></td>
+<td>Redundant — TMDb already provides runtime, language, genres</td>
+</tr>
+</tbody>
+</table>
+<h2>3. Merge Strategy</h2>
+<ol>
+<li>Netflix Movie CSV ←→ MovieLens <code>movies.csv</code> (Key: Cleaned title + Year, fuzzy TF-IDF)</li>
+<li>MovieLens <code>movies.csv</code> ←→ MovieLens <code>links.csv</code> (Key: movieId)</li>
+<li>movieId → tmdbId → TMDb overview</li>
+<li>All merged on unified movie_idx (contiguous int).</li>
+</ol>
+<p>⚠️ <strong>Warning</strong>: Never merge Netflix Movie_ID directly with MovieLens movieId — they are completely different internal ID spaces. Always go through the title+year fuzzy map.</p>
+<h2>4. Column Classification Table</h2>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>Column</th>
+<th>Classification</th>
+<th>Use / Remove</th>
+<th>Reason</th>
+<th>Effect on Accuracy</th>
+<th>Effect on Speed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Netflix Rating</td>
+<td>User_ID</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Primary identifier for val/test user lookup</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>Netflix Rating</td>
+<td>Rating</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Target variable for RMSE evaluation</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>Netflix Rating</td>
+<td>Movie_ID</td>
+<td>Essential</td>
+<td>USE (mapped)</td>
+<td>Links to ML movie space</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>Netflix Movie</td>
+<td>Movie_ID</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Key for fuzzy alignment</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>Netflix Movie</td>
+<td>Name</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Title matching in alignment</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>Netflix Movie</td>
+<td>Year</td>
+<td>Useful Optional</td>
+<td>USE</td>
+<td>Reduces false-positives</td>
+<td>Medium</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Ratings</td>
+<td>userId</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Defines training user profiles</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Ratings</td>
+<td>movieId</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Defines item space</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Ratings</td>
+<td>rating</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Target for MSE / Path A</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Ratings</td>
+<td>timestamp</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Required for temporal train/val split</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Movies</td>
+<td>movieId</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Join key</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Movies</td>
+<td>title</td>
+<td>Useful Optional</td>
+<td>USE</td>
+<td>Title text used only in fuzzy match</td>
+<td>Low</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Movies</td>
+<td>genres</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Genre embedding table</td>
+<td>High</td>
+<td>Low cost</td>
+</tr>
+<tr>
+<td>ML Links</td>
+<td>movieId</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Bridge key</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Links</td>
+<td>imdbId</td>
+<td>Unnecessary</td>
+<td>REMOVE</td>
+<td>TMDb covers everything IMDb provides</td>
+<td>Neutral</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>ML Links</td>
+<td>tmdbId</td>
+<td>Essential</td>
+<td>USE</td>
+<td>API key to fetch plots</td>
+<td>High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>Genome Scores</td>
+<td>movieId</td>
+<td>Harmful</td>
+<td>REMOVE</td>
+<td>Only covers 13,816/62,423 movies</td>
+<td>Negative</td>
+<td>Very slow</td>
+</tr>
+<tr>
+<td>Genome Scores</td>
+<td>tagId</td>
+<td>Harmful</td>
+<td>REMOVE</td>
+<td>1,128-dim vector dimension explosion</td>
+<td>Marginal</td>
+<td>Very slow</td>
+</tr>
+<tr>
+<td>TMDb</td>
+<td>overview</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Primary SBERT input text</td>
+<td>Very High</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>TMDb</td>
+<td>popularity</td>
+<td>Essential</td>
+<td>USE</td>
+<td>Scalar feature for hybrid model</td>
+<td>Medium</td>
+<td>Neutral</td>
+</tr>
+<tr>
+<td>TMDb</td>
+<td>vote_average</td>
+<td>Harmful</td>
+<td>REMOVE</td>
+<td>Aggregate rating signal — leaks test labels</td>
+<td>Leakage</td>
+<td>Neutral</td>
+</tr>
+</tbody>
+</table>
+<h2>5. Leakage and Harmful Columns</h2>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Risk</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vote_average (TMDb)</td>
+<td>⛔ <strong>DIRECT LEAKAGE</strong></td>
+<td>Aggregate of all user ratings — is essentially a smoothed version of the target we are trying to predict</td>
+</tr>
+<tr>
+<td>vote_count (TMDb)</td>
+<td>⚠️ Indirect Leakage</td>
+<td>Highly correlated with popularity rank which correlates with rating distribution</td>
+</tr>
+<tr>
+<td>genome-scores relevance</td>
+<td>⚠️ Noise Risk</td>
+<td>Only available for 13,816/62,423 movies. Applying it creates structured missingness that biases the model</td>
+</tr>
+<tr>
+<td>Netflix Movie_ID</td>
+<td>⛔ <strong>WRONG KEY</strong></td>
+<td>Netflix IDs are internal to Netflix and different from ML IDs</td>
+</tr>
+</tbody>
+</table>
+<h2>6. Required Preprocessing Steps</h2>
+<ol>
+<li>Temporal split on MovieLens only (80% train / 10% val / 10% test).</li>
+<li>Random user-level split on Netflix (50% val / 50% test).</li>
+<li>Filter ML sparse interactions: Remove users with &lt; 5 ratings; movies with &lt; 10 ratings.</li>
+<li>Fuzzy title alignment Netflix → MovieLens.</li>
+<li>Drop rows where Netflix movie_id is not in the alignment map.</li>
+<li>Mean-center ratings per user for MF Path A.</li>
+<li>BPR binarisation: centered rating &gt; 0 → positive interaction.</li>
+<li>Genre one-hot / embedding.</li>
+<li>SBERT on TMDb overview field.</li>
+<li>Log-normalise popularity scalar.</li>
+<li>Pop-proportional negative sampling for BPR.</li>
+</ol>
+<h2>7. Recommended Features Per Model Component</h2>
+<p><strong>Matrix Factorization (Path A)</strong>
+- user_idx (contiguous int)
+- movie_idx (contiguous int)
+- rating_centered (float32 target)</p>
+<p><strong>BPR Ranking (Path B)</strong>
+- user_idx
+- positive_movie_idx
+- negative_movie_idx (sampled popularity-proportional)</p>
+<p><strong>SBERT Embeddings</strong>
+- Primary: TMDb overview (plot text)
+- Fallback if missing: ML movie title + genres</p>
+<p><strong>Metadata Features (per movie)</strong>
+- Genre embedding: ML movies.csv genres
+- Popularity scalar: Log(ML rating count + 1)
+- Release year: Netflix Movie Year or TMDb release_date</p>
+<h2>8. Final Strict Decision</h2>
+<ul>
+<li>✅ <strong>Use</strong>: <code>Netflix_Dataset_Rating.csv</code> (validation/testing only), <code>MovieLens ratings.csv</code> (training), <code>MovieLens movies.csv</code>, <code>MovieLens links.csv</code>, <code>TMDb</code>: overview, popularity, release_date(year).</li>
+<li>❌ <strong>Do Not Use</strong>: <code>genome-scores.csv</code>, <code>tags.csv</code>, <code>genome-tags.csv</code>, <code>TMDb vote_average</code>, <code>TMDb vote_count</code>, IMDb.</li>
+<li>🔗 <strong>Merge By</strong>: Netflix Movie_ID → MovieLens movieId via TF-IDF fuzzy title+year match. MovieLens movieId → TMDb via links.csv tmdbId exact join.</li>
+<li><strong>Required Columns</strong>: user_idx, movie_idx, rating, timestamp(ML only), genres(ML), tmdbId(links), tmdb.overview.</li>
+<li><strong>Remove Columns</strong>: vote_average, vote_count, tagline, spoken_languages, imdbId, genome-scores.*</li>
+<li><strong>Final Verdict</strong>: The data is highly sufficient for the proposed DataFlix hybrid architecture!</li>
+</ul></body></html>

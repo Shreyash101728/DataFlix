@@ -71,8 +71,12 @@ def main():
     val_df = nf_ratings[nf_ratings["user_id"].isin(val_users)].copy()
     test_df = nf_ratings[~nf_ratings["user_id"].isin(val_users)].copy()
     
-    # Combine to create unified contiguous IDs for all users & movies
+    
     combined = pd.concat([train_df, val_df, test_df], ignore_index=True)
+    
+    # DROP NANS HERE to prevent IntCastingNaNError!
+    combined = combined.dropna(subset=["user_id", "movie_id", "rating"])
+    
     user_map, movie_map, combined_idx = create_id_mappings(combined)
     n_users, n_movies = len(user_map), len(movie_map)
     
@@ -110,7 +114,7 @@ def main():
     
     # ─── Step 7: Prepare Features ───
     print("\n[STEP 7] Feature Engineering")
-    ml_movies = load_movielens_movies()
+    ml_movies = pd.read_csv(ROOT_DIR / "ml-25m" / "ml-25m" / "movies.csv")
     if "movieId" in ml_movies.columns:
         ml_movies = ml_movies.rename(columns={"movieId": "movie_id"})
         

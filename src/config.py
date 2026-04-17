@@ -21,6 +21,12 @@ NETFLIX_ARCHIVE_DIR = ROOT_DIR / "archive"  # Alternative location
 MOVIELENS_RAW_DIR = RAW_DIR / "movielens"
 TMDB_RAW_DIR = RAW_DIR / "tmdb"
 
+# Local dataset files (no API needed)
+TMDB_CSV_PATH = ROOT_DIR / "tmdb" / "TMDB_movie_dataset_v11.csv"
+IMDB_BASICS_PATH = ROOT_DIR / "imdb" / "imdb tsv" / "title.basics.tsv"
+IMDB_RATINGS_PATH = ROOT_DIR / "imdb" / "imdb tsv" / "title.ratings.tsv"
+ML_LINKS_PATH = ROOT_DIR / "ml-25m" / "ml-25m" / "links.csv"
+
 # Processed file paths
 RATINGS_CSV = PROCESSED_DIR / "ratings.csv"
 MOVIES_CSV = PROCESSED_DIR / "movies.csv"
@@ -61,7 +67,7 @@ NUM_HEADS = 4              # Self-attention heads H
 MLP_HIDDEN = [256, 64]     # MLP prediction head
 DROPOUT = 0.2
 NUM_GENRES = 20            # Genre embedding table size
-SBERT_DIM = 768            # SBERT output dimension
+SBERT_DIM = 384            # SBERT output dimension (all-MiniLM-L6-v2)
 
 # ──────────────────────────────────────────────
 # Training — Path A (MSE)
@@ -103,11 +109,8 @@ OPTUNA_LR_RANGE = (1e-4, 1e-2)
 OPTUNA_HEADS = [2, 4, 8]
 OPTUNA_EMBED_DIMS = [64, 128, 256]
 
-# ──────────────────────────────────────────────
-# External APIs
-# ──────────────────────────────────────────────
-TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "534898af55eba345d46e6627bb003bde")
-TMDB_BASE_URL = "https://api.themoviedb.org/3"
+# External APIs — NOT USED (local datasets used instead)
+# TMDB_API_KEY = "..."  # API not needed; use tmdb/TMDB_movie_dataset_v11.csv
 
 # ──────────────────────────────────────────────
 # Random seed
